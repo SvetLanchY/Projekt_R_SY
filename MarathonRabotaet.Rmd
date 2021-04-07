@@ -1,0 +1,218 @@
+---
+title: "Marathon"
+author: "Svetlana Yakub"
+rutime: shiny
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning = FALSE, echo=TRUE)
+```
+
+<h1>**Анализ данных с помощью программы R**<h1>
+
+<h2>Связь между демографическими параметрами и успехом в забеге марафона<h2>
+
+<h3>1.Анализ датасета Dataset-Boston-2019.csv, скаченного со страницы www.kaggle.com/<h3>
+
+>Чтобы иметь возможность проводить анализ данных и получать графические изображения загружаем и устанавливаем следующие пакеты и библиотеки:
+
+```{r}
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("DT")
+library(DT)
+#install.packages("GGally")
+library(GGally)
+#install.packages("mosaic")
+library(mosaic)
+#install.packages("doBy")
+library(doBy)
+#install.packages("RcmdrMisc")
+#install.packages("rcmdr")
+library(RcmdrMisc) 
+library(car)
+#install.packages("plotrix")
+library(plotrix)
+```
+
+
+>Для анализа csv-файл был загружен с помощью следующей команды:
+
+
+```{r}
+library(tidyverse)
+Marathon <- read.csv("C:/Users/CC-Student.MININT-BQ5DQM7/Desktop/Dataset-Boston-2019.csv")
+DT::datatable(Marathon)
+```
+
+
+>1.1 Описание переменных
+
+>Следующая команда дает обзор переменных и их характеристик. Можно увидеть, например, что у нас данные по 26651 участнику забега, распределенные по 8 переменным с типом данных «int» для числовой и «chr» для номинальной информации.
+
+```{r}
+str(Marathon)
+```
+
+>Чтобы проводить дальнейшие исследования необходимо было сгенерировать еще две переменные:
+
+```{r}
+net_hr <- Marathon$Result_sec/3600
+Marathon <- cbind (Marathon,net_hr) 
+```
+
+```{r}
+km_per_hour <- 42/net_hr
+Marathon <- cbind (Marathon,km_per_hour)
+```
+
+```{r}
+summary(Marathon)
+```
+
+> 1.2 Построим различные диаграммы и вытащим различную информацию: 
+
+```{r}
+q <- qplot(Marathon$Country, xlab="Country", ylab = "Number of Participants", main="Histogram Country of Origin")
+q + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 5))
+```
+
+```{r}
+count(Marathon, Country)
+```
+
+
+```{r}
+mean(Marathon$net_hr)
+```
+
+```{r}
+ qplot(Marathon$Age, geom = "histogram", bindwidth = 5, main = "Histogram Age", ylab = "Number of Participants", xlab = "Age")
+```
+
+
+```{r}
+barplot(table(Marathon$Gender), col=c("pink","lightblue"), main = "Bar graph male to female ratio", ylab = "Number of participants", xlab = "Gender", ylim = c(0,15500))
+```
+
+```{r}
+options(repr.plot.width=12, repr.plot.height=7)
+Marathon_gen = table(Marathon$Gender)
+
+gen <- pie3D(Marathon_gen, labels=c(paste('Female'), paste('Male')), 
+main='Gender distribution', explode = 0.12, start=2, theta=0.9, labelcex=2.0, cex.main=2, radius=0.9 )
+```
+
+```{r}
+boxplot(Age ~ Gender, Marathon)
+```
+
+```{r}
+qplot(Marathon$km_per_hour, geom = "histogram", bindwidth = 5, main = "Speed destribution histogram ", ylab = "Number of participants", xlab = "km/h")
+```
+
+```{r}
+mean(Marathon$km_per_hour )
+```
+
+```{r}
+dotPlot(~net_hr, nint=50, data=Marathon, main = "Run time distribution diagram", ylab = "Number of participants", xlab = "Run time in h")
+```
+
+
+<h2>**2. Дедуктивный анализ гипотез**<h2>
+
+<h3>2.1 Успех зависит от возраста<h3>
+
+- H1: Чем старше бегун, тем больше времени ему требуется
+- H0: Более страший возраст не имеет никакого влияния на время пробега
+
+
+>Чтобы проверить эту гипотезу, переменная Age необходима как независимая переменная и net_hours как зависимая. Гипотеза утверждает, что эти переменные имеют положительную корреляцию, то есть бегунам старшего возраста нужно больше времени для бега на данную дистанцию, чем бегунам младшего возраста.
+Строим диаграмму разброса по возрасту и продолжительности забега:
+
+```{r}
+xyplot(net_hr~Age, data = Marathon, main="Scatter Plot Age and run duration in hours", xlab = "Age", ylab = "Run duration in h", col = "tan2")
+```
+
+и высчитываем коэффициент корреляции:
+
+```{r}
+rcorr.adjust(Marathon[,c("net_hr", "Age")], type="pearson", use = "complete")
+```
+
+>Он составляет 0,261 и показывает низкую положительную корреляцию, таким образом, усиливает интерпретацию диаграммы разброса, поскольку облако точек имеет более горизонтальную форму, чем вертикальную.
+
+
+```{r}
+regression_age<-lm(net_hr~Age, data = Marathon)
+summary(regression_age) 
+```
+>Здесь видно, что наклон линии регрессии очень небольшой, но все же положительный(0,0169542). 
+
+>Качество прогноза можно определить по multiple R-squared, которое здесь достаточно низкое - 0.06813.
+Таким образом прогноз регрессионной модели только приблизительно хорош, как если бы для прогноза использовалось среднее значение времени пробега.
+
+>Теперь строим график линии регрессии зависимости возраста и времени пробега:
+
+```{r}
+library(car)
+scatterplot(net_hr~Age, boxplots=FALSE, xlab="Age", ylab="Duration", main="Regression line of Age and time", smooth=FALSE, data=Marathon)
+```
+
+>Таким образом можно сделать вывод, что H1 подтверждается на основе положительного наклона линии регрессии и низкого p-значения, а H0 отбрасывается. Возраст влияет на успех бегунов.
+
+
+<h3>2.2 Успех зависит от пола<h3>
+
+- H1: Женщины и мужчины бегают с разной скоростью
+- H0: Нет никакой разницы между скоростью и полом спортсмена
+
+
+>Эта гипотеза проверяется с использованием переменных Gender, как независимой переменной и net_hr и km_per_hour как зависимых переменных. Гипотеза гласит, что мужчины и женщины достигают разных средних скоростей. 
+>Для этого создается набор данных и матрица диаграммы с соответствующими переменными. Видно, что среднее значение скорости для мужчин выше, чем для женщин, и, наоборот, среднее время пробега ниже для мужчин, чем для женщин. Оба предполагают, что мужчины быстрее женщин.
+
+```{r}
+Marathon_G_and_G <- Marathon 
+Marathon_G_and_G$"Rank_Tot" <- NULL 
+Marathon_G_and_G$"Age" <- NULL
+Marathon_G_and_G$"Country" <- NULL
+Marathon_G_and_G$"Result_hr" <- NULL
+Marathon_G_and_G$"Result_sec" <- NULL
+Marathon_G_and_G$"Country_code" <- NULL
+Marathon_G_and_G$"Rank_Gender" <- NULL
+ggpairs(Marathon_G_and_G, columns = 1:3, title="Diagram Matrix Speeed and Gender", aes(color=Gender)) 
+```
+
+
+>Интерпретация диаграммы для медианы подтверждается квантилем в 50%.
+>Также подтверждается ожидание, основанное на видимом нормальном распределении, что средние значения обеих зависимых переменных, а также медианы соответственно ниже или выше для мужчин и женщин:
+
+```{r}
+numSummary(Marathon_G_and_G[,"km_per_hour"], groups=Marathon_G_and_G$Gender,statistics=c("mean", "sd", "IQR", "quantiles"))
+```
+
+
+```{r}
+numSummary(Marathon_G_and_G[,"net_hr"], groups=Marathon_G_and_G$Gender,statistics=c("mean", "sd", "IQR", "quantiles")) 
+```
+>Здесь высчитываем разницу в средней скорости мужчин и женщин.
+
+```{r}
+km_per_hour_men <- Marathon_G_and_G[Marathon_G_and_G$Gender == "M",]
+View(km_per_hour_men)
+km_per_hour_female <- Marathon_G_and_G[Marathon_G_and_G$Gender == "F",]
+km_per_hour_MEN <- mean(km_per_hour_men$km_per_hour, na.rm = TRUE)
+km_per_hour_FEMALE <- mean(km_per_hour_female$km_per_hour, na.rm =TRUE)
+km_per_hour_difference <- km_per_hour_MEN - km_per_hour_FEMALE
+km_per_hour_difference
+```
+>Таким образом мужчины на 1.2 км/ч быстрее, чем женщины
+
+```{r}
+t.test(km_per_hour ~ Gender, data = Marathon)
+```
+>Значение p, равное 0,00000000000000022, говорит о том, что при допущении = 5% этот результат выборки вероятен, если предположить,что Н0 верна. Из этого делаем вывод, что H1 сохраняется, а H0 отбрасывается.
+
+<h3>**Спасибо за внимание!**<h3>
